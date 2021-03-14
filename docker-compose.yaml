@@ -1,0 +1,84 @@
+version: '2.1'
+services:
+    postgres:
+        image: postgres
+        environment:
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+        ports: 
+            - 5432:5432
+        logging:
+            options:
+                max-size: 100m
+                max-file: "100"
+    
+    init-container:
+        image: us.gcr.io/de-exam-kansinee/airflow:latest
+        # build:
+        #     context: .
+        #     dockerfile: Dockerfile
+        depends_on: ["postgres"]
+        environment:
+            - AIRFLOW_HOME=/opt/airflow
+            - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+            - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+            - AIRFLOW__CORE__FERNET_KEY=AIzr6vvNsJATjwXWWuE10XUZL2XjoPLEuNtTaju_vfQ=
+        command:
+            - initdb
+
+    webserver:
+        image: us.gcr.io/de-exam-kansinee/airflow:latest
+        depends_on:
+            - postgres
+        restart: always
+        environment:
+            - AIRFLOW_HOME=/opt/airflow
+            - AIRFLOW__CORE__LOAD_EXAMPLES=False
+            - AIRFLOW__CORE__DEFAULT_TIMEZONE=Asia/Bangkok
+            - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+            - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+            - AIRFLOW__CORE__FERNET_KEY=AIzr6vvNsJATjwXWWuE10XUZL2XjoPLEuNtTaju_vfQ=
+            - AIRFLOW__DAG_DIR_LIST_INTERVAL=30
+        logging:
+            options:
+                max-size: 10m
+                max-file: "3"
+        ports:
+            - "8080:8080"
+        command:
+            - webserver
+        volumes:
+            - ./dags:/opt/airflow/dags
+            - ./logs:/opt/airflow/logs
+            - ./plugins:/opt/airflow/plugins
+            - ./airflow.cfg:/temp/airflow.cfg
+            - ./service-account/*:/temp/service_account/
+            - ./create-connection.sh:/temp/config/create-connection.sh
+        healthcheck:
+            test: ["CMD-SHELL", "[ -f /opt/airflow/airflow-webserver.pid ]"]
+            interval: 30s
+            timeout: 30s
+            retries: 3
+
+    scheduler:
+        image: us.gcr.io/de-exam-kansinee/airflow:latest
+        restart: always
+        depends_on:
+            - webserver
+        environment:
+            - AIRFLOW_HOME=/opt/airflow
+            - AIRFLOW__CORE__LOAD_EXAMPLES=False
+            - AIRFLOW__CORE__DEFAULT_TIMEZONE=Asia/Bangkok
+            - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+            - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+            - AIRFLOW__CORE__FERNET_KEY=AIzr6vvNsJATjwXWWuE10XUZL2XjoPLEuNtTaju_vfQ=
+            - AIRFLOW__DAG_DIR_LIST_INTERVAL=30
+        command: scheduler
+        volumes:
+            - ./dags:/opt/airflow/dags
+            - ./logs:/opt/airflow/logs
+            - ./plugins:/opt/airflow/plugins
+            - ./airflow.cfg:/temp/airflow.cfg
+            - ./service-account/*:/temp/service_account/
+            - ./create-connection.sh:/temp/config/create-connection.sh
